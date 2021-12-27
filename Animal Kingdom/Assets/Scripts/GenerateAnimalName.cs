@@ -1,77 +1,26 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
 
-// Maybe i shouldn't have done all of this in one prefab
 public class GenerateAnimalName : MonoBehaviour
 {
-    VisualElement Root;
-    VisualElement LetterContainer;
-    Label LabelScore;
-    Label LabelTimer;
-
-    VisualElement ElementGameOver;
-    Label LabelGameOverScore;
-    Button ButtonMainMenu;
-    Button ButtonRestart;
-
     [SerializeField]
     SpriteRenderer SpriteRenderer;
 
     [SerializeField]
+    SpriteRenderer AnimalLetter;
+
+    [SerializeField]
+    Sprite[] letters = new Sprite[0];
+
+    [SerializeField]
     Sprite[] animals = new Sprite[28];
 
-    [SerializeField]
-    float TypeTimerInitial = 10;
-
-    [SerializeField]
-    float TypeTimerDecrement = 0.1f;
-
-    [SerializeField]
-    float MinimumTimerTreshhold = 5f;
-    int lastAnimalIndex = 0;
-    string animalName = null;
-    float TypeTimer = 0;
-    List<Button> animalLetterButtons = new List<Button>();
-
-    Slider Slider;
+    string animalName = "";
     void Start()
     {
-        Root = GetComponent<UIDocument>().rootVisualElement;
-        LetterContainer = Root.Q<VisualElement>("LetterContainer");
-        LabelTimer = Root.Q<Label>("LabelTimer");
-        LabelScore = Root.Q<Label>("LabelScore");
-
-        ElementGameOver = Root.Q<VisualElement>("ElementGameOver");
-        LabelGameOverScore = Root.Q<Label>("LabelGameOverScore");
-        Button ButtonMainMenu = Root.Q<Button>("ButtonMainMenu");
-        Button ButtonRestart = Root.Q<Button>("ButtonRestart");
-
-        ButtonRestart.clicked += RestartGame;
-        ButtonMainMenu.clicked += MainMenu;
-
-        TypeTimer = TypeTimerInitial;
-
-        Clear();
-        GenerateAnimal();
         GameManager.Score = 0;
-        GameManager.GameOver = false;
-    }
-
-    private void MainMenu()
-    {
-        SceneManager.LoadScene("SceneMainMenu");
-    }
-
-    private void RestartGame()
-    {
-        Clear();
+        GameManager.Timer = 10f;
+        GameManager.LastAnimalIndex = 0;
         GenerateAnimal();
-        GameManager.Score = 0;
-        TypeTimer = TypeTimerInitial;
-        ElementGameOver.style.display = DisplayStyle.None;
-
         GameManager.GameOver = false;
     }
 
@@ -79,79 +28,43 @@ public class GenerateAnimalName : MonoBehaviour
     {
         if (GameManager.GameOver)
         {
+            SpriteRenderer.gameObject.SetActive(false);
+            AnimalLetter.gameObject.SetActive(false);
             return;
         }
-
-        if (TypeTimer <= 0)
+        else
         {
-            GameManager.GameOver = true;
-
-            ElementGameOver.style.display = DisplayStyle.Flex;
-            LabelGameOverScore.text = LabelScore.text;
+            SpriteRenderer.gameObject.SetActive(true);
+            AnimalLetter.gameObject.SetActive(true);
         }
 
-        // If it's the last letter we typed
-        // Then we reset the variables
-        // Generate new animal
-        // Increment new score
-        // And decrease the time allowed to type again
-        if (lastAnimalIndex == animalName.Length)
+        if (GameManager.LastAnimalIndex == animalName.Length || GameManager.LastAnimalIndex == -1)
         {
-            Clear();
-            GenerateAnimal();
             GameManager.Score++;
-
-            float typeTimerDecrementer = TypeTimerDecrement * GameManager.Score;
-
-            if (typeTimerDecrementer <= 5)
+            if (GameManager.Score * 0.1 < 5)
             {
-                TypeTimer = TypeTimerInitial - typeTimerDecrementer;
+                GameManager.Timer = 10f - (GameManager.Score * 0.1f);
             }
             else
             {
-                TypeTimer = MinimumTimerTreshhold;
+                GameManager.Timer = 5f;
             }
 
+            GameManager.LastAnimalIndex = 0;
+            Clear();
+            GenerateAnimal();
             return;
         }
 
-        // T I G E R <- Press T then I then G then E then R
-        // Checks the first letter that needs to be typed
-        // When it's typed we move to the next letter
-        // And blur out the typed one
         string inputString = Input.inputString;
-        if (inputString == animalName[lastAnimalIndex].ToString())
+        if (inputString == animalName[GameManager.LastAnimalIndex].ToString())
         {
-            // Check if the button is read from a mistake, if it is remove that class
-            if (animalLetterButtons[lastAnimalIndex].ClassListContains("typed-error"))
-            {
-                animalLetterButtons[lastAnimalIndex].RemoveFromClassList("typed-error");
-                animalLetterButtons[lastAnimalIndex].AddToClassList("to-be-typed");
-            }
+            Color currentLetterColor = GameManager.AddedLetters[GameManager.LastAnimalIndex].color;
+            currentLetterColor.a = 0.3f;
+            GameManager.AddedLetters[GameManager.LastAnimalIndex].color = currentLetterColor;
 
-            animalLetterButtons[lastAnimalIndex].AddToClassList("typed");
-            lastAnimalIndex++;
+            GameManager.LastAnimalIndex++;
         }
-        else if (inputString != "")
-        {
-            animalLetterButtons[lastAnimalIndex].RemoveFromClassList("to-be-typed");
-            animalLetterButtons[lastAnimalIndex].AddToClassList("typed-error");
-        }
-
-        // Timer goes down
-        // Update the score
-        // Update the timer
-        TypeTimer -= Time.deltaTime;
-        LabelScore.text = $"Score: {GameManager.Score}";
-        LabelTimer.text = TypeTimer.ToString("#.##");
-    }
-
-    // I should rename this to ClearState
-    private void Clear()
-    {
-        lastAnimalIndex = 0;
-        LetterContainer.Clear();
-        animalLetterButtons.Clear();
     }
 
     void GenerateAnimal()
@@ -163,21 +76,40 @@ public class GenerateAnimalName : MonoBehaviour
         SpriteRenderer.sprite = animals[randomAnimal];
 
         // Gets the selected animal name
-        string animalName = animals[randomAnimal].name;
-
-        // And changes the global var animalName
-        this.animalName = animalName;
+        animalName = animals[randomAnimal].name;
 
         // Foreach letter of the animal add a button
-        foreach (char animalLetter in animalName)
+        for (int i = 0; i < animalName.Length; i++)
         {
-            Button buttonAnimalLetter = new Button();
-            buttonAnimalLetter.text = animalLetter.ToString();
-            buttonAnimalLetter.AddToClassList("button");
-            buttonAnimalLetter.AddToClassList("to-be-typed");
+            for (int j = 0; j < letters.Length; j++)
+            {
+                if (letters[j].name == $"letter_{animalName[i].ToString().ToUpper()}")
+                {
+                    var spriteAnimalLetter = Instantiate(AnimalLetter);
 
-            animalLetterButtons.Add(buttonAnimalLetter);
-            LetterContainer.Add(buttonAnimalLetter);
+                    if (animalName.Length % 2 == 0)
+                    {
+                        spriteAnimalLetter.transform.position = new Vector2((i - animalName.Length / 2.5f) * 1.4f, -2);
+                    }
+                    else
+                    {
+                        spriteAnimalLetter.transform.position = new Vector2((i - animalName.Length / 2) * 1.4f, -2);
+                    }
+                    spriteAnimalLetter.sprite = letters[j];
+
+                    GameManager.AddedLetters.Add(spriteAnimalLetter);
+                    break;
+                }
+            }
         }
+    }
+
+    public static void Clear()
+    {
+        foreach (var item in GameManager.AddedLetters)
+        {
+            Destroy(item.gameObject);
+        }
+        GameManager.AddedLetters.Clear();
     }
 }
